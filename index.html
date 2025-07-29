@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>拖拽式三维科技感企业级数据可视化大屏低代码生成平台</title>
+    <style>
+      /* 防止页面闪烁 */
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0a0a0a;
+        color: #ffffff;
+        font-family: 'Inter', sans-serif;
+      }
+      
+      /* 加载动画 */
+      .loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #8b5cf6;
+        font-size: 18px;
+      }
+      
+      .loading::after {
+        content: '';
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #8b5cf6;
+        border-radius: 50%;
+        border-top-color: transparent;
+        animation: spin 1s linear infinite;
+        margin-left: 10px;
+      }
+      
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="loading">正在加载...</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
