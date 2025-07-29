@@ -53,8 +53,7 @@ build/Release
 # 依赖目录
 node_modules/
 jspm_packages/
-/node_modules
-node_modules
+
 
 # TypeScript缓存
 *.tsbuildinfo
