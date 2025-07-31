@@ -24,7 +24,7 @@
             'dragging': isDragging && dragComponent?.id === component.id
           }"
           :style="getComponentStyle(component)"
-          @click="selectComponent(component.id)"  
+          @click.native="selectComponent(component.id)"  
           @mousedown="startDrag($event, component)"
         >
           <!-- 调试信息 -->
@@ -38,7 +38,6 @@
             :config="component"
             :data="component.data"
             @error="(err) => console.error('Component error:', err)"
-            @click.native="selectComponent(component.id)" 
           />
           
           <!-- 选中状态的控制点 -->
@@ -268,7 +267,10 @@ const handleCanvasClick = () => {
 
 const selectComponent = (id) => {
   console.log('Selecting component:', id);
+  // 添加更多日志，确认函数被调用
+  console.log('Current selected component:', canvasStore.selectedComponent);
   canvasStore.selectComponent(id);
+  console.log('After selection, selected component:', canvasStore.selectedComponent);
 }
 
 const startDrag = (event, component) => {
