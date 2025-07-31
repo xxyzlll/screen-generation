@@ -36,16 +36,16 @@
       <div class="absolute top-0 left-0 w-8 h-8 bg-gray-800 border-r border-b border-gray-600"></div>
     </div>
     
+    // 修改滚动容器样式，禁用滚动
     <!-- 画布滚动容器 -->
     <div 
       ref="scrollContainer"
-      class="canvas-scroll-container absolute inset-0 overflow-auto"
+      class="canvas-scroll-container absolute inset-0 overflow-hidden"
       :class="{ 'ml-8 mt-8': editorStore.showRuler }"
-      @scroll="handleScroll"
     >
       <!-- 画布背景 -->
       <div 
-        class="canvas-background relative"
+        class="canvas-background absolute inset-0 flex items-center justify-center"
         :style="canvasBackgroundStyle"
       >
         <!-- 网格 -->
@@ -140,8 +140,71 @@ import TimeSelector from '../Controls/TimeSelector.vue'
 const editorStore = useEditorStore()
 const componentsStore = useComponentsStore()
 
+// 在 script setup 部分添加
 const scrollContainer = ref<HTMLElement>()
 const canvas = ref<HTMLElement>()
+
+// 计算自适应缩放比例
+const calculateAutoScale = () => {
+  if (!scrollContainer.value) return 1
+  
+  const containerRect = scrollContainer.value.getBoundingClientRect()
+  const padding = 100 // 留一些边距
+  
+  const availableWidth = containerRect.width - padding * 2
+  const availableHeight = containerRect.height - padding * 2
+  
+  const scaleX = availableWidth / editorStore.canvas.width
+  const scaleY = availableHeight / editorStore.canvas.height
+  
+  // 取较小的缩放比例，确保画布完全可见
+  return Math.min(scaleX, scaleY, 1) // 最大不超过100%
+}
+
+// 修改画布背景样式
+const canvasBackgroundStyle = computed(() => {
+  return {
+    width: '100%',
+    height: '100%',
+    background: 'radial-gradient(circle at 50% 50%, #1f2937 0%, #111827 100%)'
+  }
+})
+
+// 修改主画布样式，移除transform，直接居中
+const canvasStyle = computed(() => {
+  const autoScale = calculateAutoScale()
+  return {
+    width: `${editorStore.canvas.width}px`,
+    height: `${editorStore.canvas.height}px`,
+    transform: `scale(${autoScale})`,
+    transformOrigin: 'center center',
+    background: editorStore.canvas.background,
+    flexShrink: 0
+  }
+})
+
+// 移除滚动处理函数
+// const handleScroll = () => {
+//   // 不再需要滚动处理
+// }
+
+// 监听窗口大小变化
+const handleResize = () => {
+  // 触发重新计算
+  nextTick(() => {
+    // 强制更新计算属性
+  })
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  document.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  document.removeEventListener('keydown', handleKeyDown)
+})
 
 // 组件映射
 const componentMap = {
@@ -174,24 +237,7 @@ const dragState = ref<DragState>({
   currentY: 0
 })
 
-// 画布样式
-const canvasStyle = computed(() => ({
-  width: `${editorStore.canvas.width}px`,
-  height: `${editorStore.canvas.height}px`,
-  transform: `scale(${editorStore.canvas.scale})`,
-  transformOrigin: '0 0',
-  background: editorStore.canvas.background
-}))
 
-// 画布背景样式
-const canvasBackgroundStyle = computed(() => {
-  const padding = 200
-  return {
-    width: `${editorStore.canvas.width * editorStore.canvas.scale + padding * 2}px`,
-    height: `${editorStore.canvas.height * editorStore.canvas.scale + padding * 2}px`,
-    padding: `${padding}px`
-  }
-})
 
 // 网格样式
 const gridStyle = computed(() => {
@@ -256,38 +302,6 @@ const rotateHandleStyle = computed(() => {
   }
 })
 
-// 标尺刻度
-const horizontalMarks = computed(() => {
-  const marks = []
-  const step = 50
-  const maxWidth = editorStore.canvas.width
-  
-  for (let i = 0; i <= maxWidth; i += step) {
-    marks.push({
-      position: i * editorStore.canvas.scale,
-      value: i,
-      major: i % 100 === 0
-    })
-  }
-  
-  return marks
-})
-
-const verticalMarks = computed(() => {
-  const marks = []
-  const step = 50
-  const maxHeight = editorStore.canvas.height
-  
-  for (let i = 0; i <= maxHeight; i += step) {
-    marks.push({
-      position: i * editorStore.canvas.scale,
-      value: i,
-      major: i % 100 === 0
-    })
-  }
-  
-  return marks
-})
 
 // 获取组件类型
 const getComponentType = (type: string) => {
@@ -308,19 +322,56 @@ const getComponentStyle = (comp: Component) => ({
 })
 
 // 获取鼠标在画布中的位置
+// 修正获取鼠标在画布中的位置函数
 const getCanvasPosition = (event: MouseEvent) => {
-  if (!canvas.value) return { x: 0, y: 0 }
+  if (!canvas.value || !scrollContainer.value) return { x: 0, y: 0 }
   
-  const rect = canvas.value.getBoundingClientRect()
-  const scale = editorStore.canvas.scale
+  const canvasRect = canvas.value.getBoundingClientRect()
+  const containerRect = scrollContainer.value.getBoundingClientRect()
+  const autoScale = calculateAutoScale()
   
-  return {
-    x: (event.clientX - rect.left) / scale,
-    y: (event.clientY - rect.top) / scale
-  }
+  // 计算鼠标相对于画布的位置
+  const x = (event.clientX - canvasRect.left) / autoScale
+  const y = (event.clientY - canvasRect.top) / autoScale
+  
+  return { x, y }
 }
 
-// 画布鼠标事件
+// 同时需要修正标尺刻度计算
+const horizontalMarks = computed(() => {
+  const marks = []
+  const step = 50
+  const maxWidth = editorStore.canvas.width
+  const autoScale = calculateAutoScale()
+  
+  for (let i = 0; i <= maxWidth; i += step) {
+    marks.push({
+      position: i * autoScale,
+      value: i,
+      major: i % 100 === 0
+    })
+  }
+  
+  return marks
+})
+
+const verticalMarks = computed(() => {
+  const marks = []
+  const step = 50
+  const maxHeight = editorStore.canvas.height
+  const autoScale = calculateAutoScale()
+  
+  for (let i = 0; i <= maxHeight; i += step) {
+    marks.push({
+      position: i * autoScale,
+      value: i,
+      major: i % 100 === 0
+    })
+  }
+  
+  return marks
+})
+
 const handleCanvasMouseDown = (event: MouseEvent) => {
   if (event.target !== canvas.value) return
   
