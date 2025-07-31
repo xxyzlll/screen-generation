@@ -3,13 +3,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import type { ChartConfig } from '@/types/chart'
 
 interface Props {
   config: ChartConfig
   data?: any[]
+  component?: any  // 添加组件属性
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -18,12 +19,23 @@ const props = withDefaults(defineProps<Props>(), {
 
 const chartRef = ref<HTMLElement>()
 let chartInstance: echarts.ECharts | null = null
+let resizeObserver: ResizeObserver | null = null
 
 const initChart = () => {
   if (!chartRef.value) return
   
   chartInstance = echarts.init(chartRef.value)
   updateChart()
+  
+  // 添加ResizeObserver监听容器尺寸变化
+  if (window.ResizeObserver) {
+    resizeObserver = new ResizeObserver(() => {
+      nextTick(() => {
+        resize()
+      })
+    })
+    resizeObserver.observe(chartRef.value)
+  }
 }
 
 const updateChart = () => {
@@ -80,8 +92,17 @@ const updateChart = () => {
 }
 
 const resize = () => {
-  chartInstance?.resize()
+  if (chartInstance) {
+    chartInstance.resize()
+  }
 }
+
+// 监听组件尺寸变化
+watch(() => props.component && [props.component.width, props.component.height], () => {
+  nextTick(() => {
+    resize()
+  })
+}, { deep: true })
 
 watch(() => [props.config, props.data], updateChart, { deep: true })
 
@@ -92,6 +113,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', resize)
+  resizeObserver?.disconnect()
   chartInstance?.dispose()
 })
 </script>

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { nextTick } from 'vue'
 import type { Component } from '../types/component'
 
 interface EditorState {
@@ -93,6 +94,16 @@ export const useEditorStore = defineStore('editor', {
       const component = this.components.find(comp => comp.id === id)
       if (component) {
         Object.assign(component, updates)
+        
+        // 如果更新了尺寸，触发resize事件
+        if (updates.width !== undefined || updates.height !== undefined) {
+          // 使用nextTick确保DOM更新完成后再触发resize
+          nextTick(() => {
+            window.dispatchEvent(new CustomEvent('component-resize', {
+              detail: { componentId: id, component }
+            }))
+          })
+        }
       }
     },
 

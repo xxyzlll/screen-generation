@@ -3,13 +3,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, inject } from 'vue'
 import * as echarts from 'echarts'
 import type { ChartConfig } from '@/types/chart'
 
 interface Props {
   config: ChartConfig
   data?: any[]
+  component?: any  // 添加组件属性
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -18,20 +19,32 @@ const props = withDefaults(defineProps<Props>(), {
 
 const chartRef = ref<HTMLElement>()
 let chartInstance: echarts.ECharts | null = null
+let resizeObserver: ResizeObserver | null = null
 
 const initChart = () => {
   if (!chartRef.value) return
   
   chartInstance = echarts.init(chartRef.value)
   updateChart()
+  
+  // 添加ResizeObserver监听容器尺寸变化
+  if (window.ResizeObserver) {
+    resizeObserver = new ResizeObserver(() => {
+      resize()
+    })
+    resizeObserver.observe(chartRef.value)
+  }
 }
 
 const updateChart = () => {
   if (!chartInstance) return
   
+  // 添加安全检查
+  const config = props.config || {}
+  
   const option = {
     title: {
-      text: props.config.title,
+      text: config.title || '图表标题',
       textStyle: {
         color: '#ffffff',
         fontSize: 16
@@ -106,15 +119,32 @@ const resize = () => {
   chartInstance?.resize()
 }
 
+// 监听组件尺寸变化
+watch(() => props.component && [props.component.width, props.component.height], () => {
+  setTimeout(() => {
+    resize()
+  }, 100) // 延迟一点确保DOM更新完成
+}, { deep: true })
+
 watch(() => [props.config, props.data], updateChart, { deep: true })
 
 onMounted(() => {
   initChart()
   window.addEventListener('resize', resize)
+  
+  // 监听组件尺寸变化事件
+  window.addEventListener('component-resize', (event: CustomEvent) => {
+    if (event.detail.componentId === props.component?.id) {
+      setTimeout(() => {
+        resize()
+      }, 100)
+    }
+  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', resize)
+  resizeObserver?.disconnect()
   chartInstance?.dispose()
 })
 </script>

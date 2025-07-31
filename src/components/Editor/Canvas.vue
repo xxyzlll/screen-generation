@@ -69,6 +69,8 @@
         >
           <!-- 组件渲染 -->
           <!-- 组件渲染 -->
+          <!-- 组件渲染 -->
+          <!-- 组件渲染 -->
           <component
             v-for="comp in editorStore.components"
             :key="comp.id"
@@ -149,16 +151,17 @@ const calculateAutoScale = () => {
   if (!scrollContainer.value) return 1
   
   const containerRect = scrollContainer.value.getBoundingClientRect()
-  const padding = 100 // 留一些边距
+  const padding = 40 // 减少边距，从100改为40
   
   const availableWidth = containerRect.width - padding * 2
-  const availableHeight = containerRect.height - padding * 2
+  // const availableHeight = containerRect.height - padding * 2
   
+  // 按宽度缩放，高度等比例
   const scaleX = availableWidth / editorStore.canvas.width
-  const scaleY = availableHeight / editorStore.canvas.height
+  // const scaleY = availableHeight / editorStore.canvas.height
   
-  // 取较小的缩放比例，确保画布完全可见
-  return Math.min(scaleX, scaleY, 1) // 最大不超过100%
+  // 设置合理的缩放范围：最小20%，最大100%
+  return Math.min(Math.max(scaleX, 0.2), 1)
 }
 
 // 修改画布背景样式
@@ -264,6 +267,8 @@ const transformControlsStyle = computed(() => {
   const selectedComponent = editorStore.getSelectedComponents[0]
   if (!selectedComponent) return {}
   
+  console.log('变换控制器样式 selectedComponent',selectedComponent);
+  
   return {
     left: `${selectedComponent.x - 4}px`,
     top: `${selectedComponent.y - 4}px`,
@@ -322,17 +327,23 @@ const getComponentStyle = (comp: Component) => ({
 })
 
 // 获取鼠标在画布中的位置
-// 修正获取鼠标在画布中的位置函数
 const getCanvasPosition = (event: MouseEvent) => {
-  if (!canvas.value || !scrollContainer.value) return { x: 0, y: 0 }
+  if (!canvas.value) return { x: 0, y: 0 }
   
   const canvasRect = canvas.value.getBoundingClientRect()
-  const containerRect = scrollContainer.value.getBoundingClientRect()
-  const autoScale = calculateAutoScale()
+  // 移除除以autoScale的操作，因为画布已经通过CSS transform缩放了
+  // getBoundingClientRect()返回的是缩放后的实际位置
+  const x = event.clientX - canvasRect.left
+  const y = event.clientY - canvasRect.top
   
-  // 计算鼠标相对于画布的位置
-  const x = (event.clientX - canvasRect.left) / autoScale
-  const y = (event.clientY - canvasRect.top) / autoScale
+  console.log('getCanvasPosition 详细计算:', {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    canvasLeft: canvasRect.left,
+    canvasTop: canvasRect.top,
+    resultX: x,
+    resultY: y
+  })
   
   return { x, y }
 }
@@ -502,6 +513,10 @@ const handleCanvasMouseMove = (event: MouseEvent) => {
 }
 
 const handleCanvasMouseUp = () => {
+  console.log('=== handleCanvasMouseUp 调试信息 ===');
+  console.log('dragState:', dragState.value);
+  console.log('selectionBox:', selectionBox.value);
+  
   if (dragState.value.dragType === 'selection' && selectionBox.value.visible) {
     // 选择框内的组件
     const box = selectionBox.value
@@ -510,9 +525,12 @@ const handleCanvasMouseUp = () => {
     const right = Math.max(box.x, box.x + box.width)
     const bottom = Math.max(box.y, box.y + box.height)
     
+    console.log('选择框范围:', { left, top, right, bottom });
+    
     editorStore.components.forEach(comp => {
       if (comp.x >= left && comp.y >= top && 
           comp.x + comp.width <= right && comp.y + comp.height <= bottom) {
+        console.log('选中组件:', comp.id, { x: comp.x, y: comp.y, width: comp.width, height: comp.height });
         editorStore.selectComponent(comp.id, true)
       }
     })
@@ -521,6 +539,8 @@ const handleCanvasMouseUp = () => {
   // 重置状态
   dragState.value.isDragging = false
   selectionBox.value.visible = false
+  
+  console.log('=== handleCanvasMouseUp 结束 ===');
 }
 
 // 组件事件
@@ -570,9 +590,37 @@ const handleDragLeave = (event: DragEvent) => {
 const handleDrop = (event: DragEvent) => {
   event.preventDefault()
   
+  console.log('=== handleDrop 调试信息 ===')
+  console.log('event.clientX:', event.clientX, 'event.clientY:', event.clientY)
+  
   try {
     const componentData = JSON.parse(event.dataTransfer!.getData('application/json'))
     const pos = getCanvasPosition(event)
+    
+    console.log('getCanvasPosition 返回:', pos);
+    console.log('componentData:', componentData);
+    
+    // 计算画布相关信息
+    if (canvas.value) {
+      const canvasRect = canvas.value.getBoundingClientRect()
+      const autoScale = calculateAutoScale()
+      console.log('canvasRect:', canvasRect);
+      console.log('autoScale:', autoScale);
+      console.log('计算过程:', {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        canvasLeft: canvasRect.left,
+        canvasTop: canvasRect.top,
+        beforeScale: {
+          x: event.clientX - canvasRect.left,
+          y: event.clientY - canvasRect.top
+        },
+        afterScale: {
+          x: (event.clientX - canvasRect.left) / autoScale,
+          y: (event.clientY - canvasRect.top) / autoScale
+        }
+      });
+    }
     
     // 确保 componentData 有效
     if (!componentData || !componentData.id) {
@@ -596,14 +644,29 @@ const handleDrop = (event: DragEvent) => {
       style: {}
     }
     
+    console.log('创建的新组件:', newComponent);
+    
     // 使用 nextTick 确保 DOM 更新完成
     nextTick(() => {
       editorStore.addComponent(newComponent)
       editorStore.selectComponent(newComponent.id)
+      console.log('组件已添加到store')
     })
   } catch (error) {
     console.error('Failed to parse dropped component:', error)
   }
+  
+  // 重置拖拽状态
+  dragState.value = {
+    isDragging: false,
+    dragType: 'component',
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0
+  }
+  
+  console.log('=== handleDrop 结束 ===')
 }
 
 // 缩放事件

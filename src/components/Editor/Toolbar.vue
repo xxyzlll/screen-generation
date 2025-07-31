@@ -256,7 +256,16 @@ const toggleRuler = () => {
 
 // 预览
 const preview = () => {
-  router.push('/preview')
+  // 将当前编辑器状态保存到localStorage或sessionStorage
+  const previewData = {
+    canvas: editorStore.canvas,
+    components: editorStore.components
+  }
+  sessionStorage.setItem('previewData', JSON.stringify(previewData))
+  
+  // 在新标签页中打开预览页面
+  const previewUrl = router.resolve('/preview').href
+  window.open(previewUrl, '_blank')
 }
 
 // 导出

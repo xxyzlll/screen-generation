@@ -18,7 +18,7 @@
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts'
 import type { Component } from '@/types/component' 
-
+import { inject } from 'vue'
 interface Props {
   component?: Component
   config?: any

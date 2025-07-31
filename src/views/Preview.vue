@@ -38,7 +38,7 @@
     <!-- 预览画布 -->
     <div 
       ref="previewContainer"
-      class="preview-canvas-container flex-1 flex items-center justify-center p-4"
+      class="preview-canvas-container flex-1 flex items-start justify-start p-4 overflow-auto"
     >
       <div 
         ref="previewCanvas"
@@ -51,6 +51,8 @@
           :key="comp.id"
           :is="getComponentType(comp.type)"
           :component="comp"
+          :config="comp.config || {}"
+          :data="comp.data || []"
           :style="getComponentStyle(comp)"
           class="absolute"
         />
@@ -63,10 +65,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useEditorStore } from '../stores/editor'
-import LineChart from '../components/Charts/LineChart.vue'
-import BarChart from '../components/Charts/BarChart.vue'
-import PieChart from '../components/Charts/PieChart.vue'
-import MapChart from '../components/Charts/MapChart.vue'
+// 修正导入路径（Charts -> charts）
+import LineChart from '../components/charts/LineChart.vue'
+import BarChart from '../components/charts/BarChart.vue'
+import PieChart from '../components/charts/PieChart.vue'
+import MapChart from '../components/charts/MapChart.vue'
 import BorderBox from '../components/Containers/BorderBox.vue'
 import CardContainer from '../components/Containers/CardContainer.vue'
 import DataFilter from '../components/Controls/DataFilter.vue'
@@ -97,8 +100,9 @@ const getComponentType = (type: string) => {
   return componentMap[type as keyof typeof componentMap] || 'div'
 }
 
-// 获取组件样式
+// 获取组件样式（考虑缩放的版本）
 const getComponentStyle = (comp: any) => {
+  const scale = getScale() // 如果使用缩放
   return {
     left: `${comp.x}px`,
     top: `${comp.y}px`,
@@ -111,15 +115,16 @@ const getComponentStyle = (comp: any) => {
   }
 }
 
-// 画布样式
+// 画布样式 - 移除缩放
 const canvasStyle = computed(() => {
   const [width, height] = selectedResolution.value.split('x').map(Number)
   return {
     width: `${width}px`,
     height: `${height}px`,
     background: editorStore.canvas.background,
-    transform: `scale(${getScale()})`,
-    transformOrigin: 'center center'
+    // 移除 transform 和 transformOrigin
+    // transform: `scale(${getScale()})`,
+    // transformOrigin: 'center center'
   }
 })
 
@@ -161,8 +166,23 @@ const handleFullscreenChange = () => {
   isFullscreen.value = !!document.fullscreenElement
 }
 
+// 在onMounted中添加数据加载逻辑
 onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  
+  // 从sessionStorage加载预览数据
+  const previewData = sessionStorage.getItem('previewData')
+  if (previewData) {
+    try {
+      const data = JSON.parse(previewData)
+      // 恢复画布和组件数据
+      editorStore.canvas = data.canvas
+      editorStore.components = data.components
+    } catch (error) {
+      console.error('Failed to load preview data:', error)
+    }
+  }
+  
   // 设置预览模式
   editorStore.setMode('preview')
 })
