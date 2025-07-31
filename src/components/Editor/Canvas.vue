@@ -120,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useEditorStore } from '../../stores/editor'
 import { useComponentsStore } from '../../stores/components'
 import type { Component } from '../../types/component'
@@ -402,6 +402,7 @@ const handleCanvasMouseDown = (event: MouseEvent) => {
 }
 
 
+// 修改鼠标移动事件，添加缩放逻辑
 const handleCanvasMouseMove = (event: MouseEvent) => {
   if (!dragState.value.isDragging) return
   
@@ -426,6 +427,76 @@ const handleCanvasMouseMove = (event: MouseEvent) => {
           y: (dragState.value.componentStartY || component.y) + deltaY
         })
       }
+    })
+  } else if (dragState.value.dragType === 'resize') {
+    // 缩放组件
+    const selectedComponent = editorStore.getSelectedComponents[0]
+    if (!selectedComponent) return
+    
+    const deltaX = pos.x - dragState.value.startX
+    const deltaY = pos.y - dragState.value.startY
+    const position = dragState.value.resizePosition
+    
+    let newX = dragState.value.componentStartX || selectedComponent.x
+    let newY = dragState.value.componentStartY || selectedComponent.y
+    let newWidth = dragState.value.originalWidth || selectedComponent.width
+    let newHeight = dragState.value.originalHeight || selectedComponent.height
+    
+    // 根据缩放手柄位置计算新的尺寸和位置
+    switch (position) {
+      case 'nw': // 左上角
+        newX += deltaX
+        newY += deltaY
+        newWidth -= deltaX
+        newHeight -= deltaY
+        break
+      case 'n': // 上边
+        newY += deltaY
+        newHeight -= deltaY
+        break
+      case 'ne': // 右上角
+        newY += deltaY
+        newWidth += deltaX
+        newHeight -= deltaY
+        break
+      case 'e': // 右边
+        newWidth += deltaX
+        break
+      case 'se': // 右下角
+        newWidth += deltaX
+        newHeight += deltaY
+        break
+      case 's': // 下边
+        newHeight += deltaY
+        break
+      case 'sw': // 左下角
+        newX += deltaX
+        newWidth -= deltaX
+        newHeight += deltaY
+        break
+      case 'w': // 左边
+        newX += deltaX
+        newWidth -= deltaX
+        break
+    }
+    
+    // 确保最小尺寸
+    const minSize = 20
+    if (newWidth < minSize) {
+      if (position.includes('w')) newX -= minSize - newWidth
+      newWidth = minSize
+    }
+    if (newHeight < minSize) {
+      if (position.includes('n')) newY -= minSize - newHeight
+      newHeight = minSize
+    }
+    
+    // 更新组件
+    editorStore.updateComponent(selectedComponent.id, {
+      x: newX,
+      y: newY,
+      width: newWidth,
+      height: newHeight
     })
   }
 }
@@ -499,42 +570,66 @@ const handleDragLeave = (event: DragEvent) => {
 const handleDrop = (event: DragEvent) => {
   event.preventDefault()
   
-  console.log('Drop event triggered') // 添加调试
-  console.log('DataTransfer data:', event.dataTransfer?.getData('application/json')) // 添加调试
-  
   try {
     const componentData = JSON.parse(event.dataTransfer!.getData('application/json'))
-    console.log('Parsed component data:', componentData) // 添加调试
     const pos = getCanvasPosition(event)
+    
+    // 确保 componentData 有效
+    if (!componentData || !componentData.id) {
+      console.error('Invalid component data:', componentData)
+      return
+    }
     
     // 创建新组件
     const newComponent: Component = {
       id: `${componentData.id}_${Date.now()}`,
       type: componentData.id,
-      name: componentData.name,
-      x: pos.x - (componentData.defaultProps.width || 100) / 2,
-      y: pos.y - (componentData.defaultProps.height || 100) / 2,
-      width: componentData.defaultProps.width || 100,
-      height: componentData.defaultProps.height || 100,
+      name: componentData.name || 'Unknown Component',
+      x: pos.x - (componentData.defaultProps?.width || 100) / 2,
+      y: pos.y - (componentData.defaultProps?.height || 100) / 2,
+      width: componentData.defaultProps?.width || 100,
+      height: componentData.defaultProps?.height || 100,
       zIndex: editorStore.components.length + 1,
       locked: false,
       visible: true,
-      props: { ...componentData.defaultProps },
+      props: { ...componentData.defaultProps } || {},
       style: {}
     }
     
-    editorStore.addComponent(newComponent)
-    editorStore.selectComponent(newComponent.id)
+    // 使用 nextTick 确保 DOM 更新完成
+    nextTick(() => {
+      editorStore.addComponent(newComponent)
+      editorStore.selectComponent(newComponent.id)
+    })
   } catch (error) {
     console.error('Failed to parse dropped component:', error)
   }
 }
 
 // 缩放事件
+// 修改缩放事件处理函数
 const handleResizeStart = (position: string, event: MouseEvent) => {
   event.stopPropagation()
-  // TODO: 实现缩放功能
-  console.log('开始缩放:', position)
+  
+  const selectedComponent = editorStore.getSelectedComponents[0]
+  if (!selectedComponent) return
+  
+  const pos = getCanvasPosition(event)
+  
+  // 设置拖拽状态为缩放
+  dragState.value = {
+    isDragging: true,
+    dragType: 'resize',
+    startX: pos.x,
+    startY: pos.y,
+    currentX: pos.x,
+    currentY: pos.y,
+    componentStartX: selectedComponent.x,
+    componentStartY: selectedComponent.y,
+    resizePosition: position,
+    originalWidth: selectedComponent.width,
+    originalHeight: selectedComponent.height
+  }
 }
 
 // 旋转事件
@@ -607,3 +702,19 @@ onUnmounted(() => {
 import { provide } from 'vue'
 
 provide('editorMode', computed(() => editorStore.mode))
+
+// 修改DragState类型定义，添加缩放相关属性
+// 在types/canvas.ts中添加：
+export interface DragState {
+  isDragging: boolean
+  dragType: 'component' | 'selection' | 'resize' | 'rotate'
+  startX: number
+  startY: number
+  currentX: number
+  currentY: number
+  componentStartX?: number
+  componentStartY?: number
+  resizePosition?: string  // 添加缩放位置
+  originalWidth?: number   // 添加原始宽度
+  originalHeight?: number  // 添加原始高度
+}

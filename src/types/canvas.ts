@@ -34,8 +34,11 @@ export interface DragState {
   startY: number
   currentX: number
   currentY: number
-  componentStartX?: number  // 添加这个属性
-  componentStartY?: number  // 添加这个属性
+  componentStartX?: number
+  componentStartY?: number
+  resizePosition?: string    // 添加缩放位置
+  originalWidth?: number     // 添加原始宽度
+  originalHeight?: number    // 添加原始高度
 } 
 
 // 网格配置
