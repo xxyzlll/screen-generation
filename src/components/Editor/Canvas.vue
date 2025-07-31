@@ -169,20 +169,22 @@ const canvasBackgroundStyle = computed(() => {
   return {
     width: '100%',
     height: '100%',
-    background: 'radial-gradient(circle at 50% 50%, #1f2937 0%, #111827 100%)'
+    background: 'radial-gradient(circle at 50% 50%, #1f2937 0%, #111827 100%)',
+    position: 'relative' // 确保定位正确
   }
 })
 
 // 修改主画布样式，移除transform，直接居中
+// 画布样式（应用缩放）
 const canvasStyle = computed(() => {
   const autoScale = calculateAutoScale()
   return {
     width: `${editorStore.canvas.width}px`,
     height: `${editorStore.canvas.height}px`,
     transform: `scale(${autoScale})`,
-    transformOrigin: 'center center',
+    transformOrigin: 'center center', // 从中心开始缩放
     background: editorStore.canvas.background,
-    flexShrink: 0
+    position: 'relative'
   }
 })
 
@@ -262,18 +264,18 @@ const selectionBoxStyle = computed(() => ({
   height: `${Math.abs(selectionBox.value.height)}px`
 }))
 
-// 变换控制器样式
+// 变换控制器样式（使用逻辑坐标）
 const transformControlsStyle = computed(() => {
   const selectedComponent = editorStore.getSelectedComponents[0]
   if (!selectedComponent) return {}
-  
-  console.log('变换控制器样式 selectedComponent',selectedComponent);
   
   return {
     left: `${selectedComponent.x - 4}px`,
     top: `${selectedComponent.y - 4}px`,
     width: `${selectedComponent.width + 8}px`,
-    height: `${selectedComponent.height + 8}px`
+    height: `${selectedComponent.height + 8}px`,
+    position: 'absolute',
+    pointerEvents: 'none'
   }
 })
 
@@ -313,42 +315,46 @@ const getComponentType = (type: string) => {
   return componentMap[type as keyof typeof componentMap] || 'div'
 }
 
-// 获取组件样式
+// 获取组件样式（逻辑坐标直接使用，缩放由画布容器处理）
 const getComponentStyle = (comp: Component) => ({
   left: `${comp.x}px`,
   top: `${comp.y}px`,
   width: `${comp.width}px`,
   height: `${comp.height}px`,
   zIndex: comp.zIndex,
-  transform: comp.style?.transform || '',
-  opacity: comp.visible ? (comp.style?.opacity || 1) : 0.5,
+  position: 'absolute',
   pointerEvents: comp.locked ? 'none' : 'auto',
   ...comp.style
 })
 
-// 获取鼠标在画布中的位置
+// 获取鼠标在画布中的逻辑坐标（不受缩放影响）
 const getCanvasPosition = (event: MouseEvent) => {
   if (!canvas.value) return { x: 0, y: 0 }
   
   const canvasRect = canvas.value.getBoundingClientRect()
-  // 移除除以autoScale的操作，因为画布已经通过CSS transform缩放了
-  // getBoundingClientRect()返回的是缩放后的实际位置
-  const x = event.clientX - canvasRect.left
-  const y = event.clientY - canvasRect.top
+  const autoScale = calculateAutoScale()
   
-  console.log('getCanvasPosition 详细计算:', {
-    clientX: event.clientX,
-    clientY: event.clientY,
-    canvasLeft: canvasRect.left,
-    canvasTop: canvasRect.top,
-    resultX: x,
-    resultY: y
+  // 计算鼠标相对于缩放后画布的位置
+  const scaledX = event.clientX - canvasRect.left
+  const scaledY = event.clientY - canvasRect.top
+  
+  // 转换为逻辑坐标（除以缩放比例）
+  const logicalX = scaledX / autoScale
+  const logicalY = scaledY / autoScale
+  
+  console.log('坐标转换:', {
+    鼠标位置: { x: event.clientX, y: event.clientY },
+    画布位置: { left: canvasRect.left, top: canvasRect.top },
+    缩放比例: autoScale,
+    显示坐标: { x: scaledX, y: scaledY },
+    逻辑坐标: { x: logicalX, y: logicalY }
   })
   
-  return { x, y }
+  return { x: logicalX, y: logicalY }
 }
 
 // 同时需要修正标尺刻度计算
+// 水平标尺（显示坐标系）
 const horizontalMarks = computed(() => {
   const marks = []
   const step = 50
@@ -357,8 +363,8 @@ const horizontalMarks = computed(() => {
   
   for (let i = 0; i <= maxWidth; i += step) {
     marks.push({
-      position: i * autoScale,
-      value: i,
+      position: i * autoScale, // 显示位置
+      value: i, // 逻辑值
       major: i % 100 === 0
     })
   }
@@ -366,6 +372,7 @@ const horizontalMarks = computed(() => {
   return marks
 })
 
+// 垂直标尺（显示坐标系）
 const verticalMarks = computed(() => {
   const marks = []
   const step = 50
@@ -374,8 +381,8 @@ const verticalMarks = computed(() => {
   
   for (let i = 0; i <= maxHeight; i += step) {
     marks.push({
-      position: i * autoScale,
-      value: i,
+      position: i * autoScale, // 显示位置
+      value: i, // 逻辑值
       major: i % 100 === 0
     })
   }
